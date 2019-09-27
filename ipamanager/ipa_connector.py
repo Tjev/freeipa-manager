@@ -71,7 +71,7 @@ class IpaConnector(FreeIPAManagerCore):
 
 
 class IpaUploader(IpaConnector):
-    def __init__(self, settings, parsed, threshold,
+    def __init__(self, settings, parsed, threshold, processes,
                  force=False, enable_deletion=False):
         """
         Initialize an IPA connector object.
@@ -83,6 +83,7 @@ class IpaUploader(IpaConnector):
         """
         super(IpaUploader, self).__init__(parsed, settings)
         self.threshold = threshold
+        self.processes = processes
         self.force = force
         self.enable_deletion = enable_deletion
         # deletion patterns used to filter commands in add-only mode
@@ -205,6 +206,17 @@ class IpaUploader(IpaConnector):
         exceed the `threshold` attribute.
         :raises ManagerError: in case of exceeded threshold/API error
         """
+
+        def execute_command(command):
+            try:
+                command.execute(api) # - Import ipa manager api
+            except CommandError as e:
+                err = 'Error executing %s: %s' % (command.description, e)
+                self.lg.error(err) # - Logging in parallel?
+                # only added here to count the number of errors
+                self.errs.append(err)
+
+
         self.load_ipa_entities()
         self._prepare_push()
         if not self.commands:
@@ -216,6 +228,24 @@ class IpaUploader(IpaConnector):
                 self.lg.info('- %s', command)
         self._check_threshold()
 
+
+        # NEW
+        if self.force:
+            # Sort commands into sublists according to
+            # their rank - this ensures correct update
+            first, second, third, fourth, fifth = ranked_commands = [[] for _ in range(5)]
+            # _add, _add_, _mod, _remove_, _del = ranked_commands = [[] for _ in range(5)]
+            for command in self.commands:
+                ranked_commands[command.rank].append(command)
+
+            for commands in ranked_commands:
+                p = multiprocessing.Pool(self.processes) # - Import multiprocessing
+                p.map(execute_command, commands) # - Coalesce these < ^ two lines into one?
+
+            if self.errs:
+                raise ManagerError(
+                    'There were %d errors executing update' % len(self.errs))
+        ''' OLD
         if self.force:
             # command sorting really important here for correct update!
             for command in sorted(self.commands):
@@ -230,7 +260,7 @@ class IpaUploader(IpaConnector):
             if self.errs:
                 raise ManagerError(
                     'There were %d errors executing update' % len(self.errs))
-
+'''
     def _check_threshold(self):
         try:
             abs_ratio = float(len(self.commands)) / self.ipa_entity_count

@@ -155,6 +155,9 @@ def parse_args():
                       help='Actually make changes (no dry run)')
     push.add_argument('-t', '--threshold', type=_type_threshold,
                       metavar='(%)', help='Change threshold', default=10)
+    push.add_argument(
+        '-p', '--processes', type=int, default=5,
+        help='FreeIPA manager push command parallel process count')
 
     pull = actions.add_parser('pull', parents=[common])
     pull.set_defaults(action='pull')

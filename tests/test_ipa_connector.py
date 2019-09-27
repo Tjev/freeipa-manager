@@ -603,7 +603,7 @@ class TestIpaUploader(TestIpaConnectorBase):
             with mock.patch('%s._prepare_push' % up_class):
                 with mock.patch('%s._check_threshold' % up_class):
                     self.uploader.push()
-        captured_log.check(
+        captured_log.check_present(
             ('IpaUploader', 'INFO', 'Would execute commands:'),
             ('IpaUploader', 'INFO', '- group_add group1 ()'),
             ('IpaUploader', 'INFO', '- group_add group2 ()'),
@@ -625,7 +625,8 @@ class TestIpaUploader(TestIpaConnectorBase):
             ('IpaUploader', 'INFO',
              u'- sudorule_add_host rule1 (hostgroup=group1)'),
             ('IpaUploader', 'INFO',
-             u'- sudorule_add_user rule1 (group=group2)'))
+             u'- sudorule_add_user rule1 (group=group2)')
+            order_matters=False)
         assert self.uploader.errs == []
 
     @log_capture('IpaUploader', level=logging.INFO)
@@ -658,7 +659,7 @@ class TestIpaUploader(TestIpaConnectorBase):
         with mock.patch('%s._prepare_push' % up_class):
             with mock.patch('%s._check_threshold' % up_class):
                 self.uploader.push()
-        captured_log.check(
+        captured_log.check_present(
             ('Command', 'INFO', 'Executing group_add group1 ()'),
             ('Command', 'INFO', u'Added group "group1"'),
             ('Command', 'INFO', 'Executing group_add group2 ()'),
@@ -700,7 +701,8 @@ class TestIpaUploader(TestIpaConnectorBase):
             ('Command', 'INFO',
              u'Executing sudorule_add_user rule1 (group=group2)'),
             ('Command', 'INFO',
-             u'sudorule_add_user rule1 (group=group2) successful'))
+             u'sudorule_add_user rule1 (group=group2) successful')
+            order_matters=False)
         assert self.uploader.errs == []
 
     @log_capture('Command', level=logging.ERROR)
@@ -714,7 +716,8 @@ class TestIpaUploader(TestIpaConnectorBase):
                 with pytest.raises(tool.ManagerError) as exc:
                     self.uploader.push()
         assert exc.value[0] == 'There were 5 errors executing update'
-        assert self.uploader.errs == [
+        errors = set(self.uploader.errs)
+        expected = {
             u"Error executing group_add_member group1 (user=user1):"
             " Error executing group_add_member: [u'- test: no such attr2']",
             u"Error executing group_add_member group1-users (user=user2):"
@@ -724,8 +727,10 @@ class TestIpaUploader(TestIpaConnectorBase):
             u"Error executing hbacrule_add_user rule1 (group=group2):"
             " Error executing hbacrule_add_user: [u'- test: no such attr2']",
             u"Error executing sudorule_add_user rule1 (group=group2):"
-            " Error executing sudorule_add_user: [u'- test: no such attr2']"]
-        captured_log.check(
+            " Error executing sudorule_add_user: [u'- test: no such attr2']"
+            }
+        assert errors == expected 
+        captured_log.check_present(
             ('Command', 'ERROR',
              u'group_add_member group1 (user=user1) failed:'),
             ('Command', 'ERROR', u'- test: no such attr2'),
@@ -740,7 +745,8 @@ class TestIpaUploader(TestIpaConnectorBase):
             ('Command', 'ERROR', u'- test: no such attr2'),
             ('Command', 'ERROR',
              u'sudorule_add_user rule1 (group=group2) failed:'),
-            ('Command', 'ERROR', u'- test: no such attr2'))
+            ('Command', 'ERROR', u'- test: no such attr2')
+            order_matters=False)
 
     def test_push_exceptions(self):
         self._create_uploader(force=True, threshold=15)
@@ -752,13 +758,16 @@ class TestIpaUploader(TestIpaConnectorBase):
                 with pytest.raises(tool.ManagerError) as exc:
                     self.uploader.push()
         assert exc.value[0] == 'There were 3 errors executing update'
-        assert self.uploader.errs == [
+        errors = set(self.uploader.errs)
+        expected = {
             u'Error executing group_add_member group1 (user=user1):'
             ' Error executing group_add_member: Some error happened',
             u'Error executing group_add_member group1-users (user=user2):'
             ' Error executing group_add_member: Some error happened',
             u'Error executing group_add_member group2 (group=group1):'
-            ' Error executing group_add_member: Some error happened']
+            ' Error executing group_add_member: Some error happened'
+            }
+        assert errors == expected 
 
     def test_push_invalid_command(self):
         self._create_uploader(force=True, threshold=15)

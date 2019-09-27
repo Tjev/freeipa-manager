@@ -119,7 +119,7 @@ class FreeIPAManager(FreeIPAManagerCore):
         utils.init_api_connection(self.args.loglevel)
         self.uploader = IpaUploader(
             self.settings, self.entities, self.args.threshold,
-            self.args.force, self.args.deletion)
+            self.args.processes, self.args.force, self.args.deletion)
         self.uploader.push()
 
     def pull(self):
